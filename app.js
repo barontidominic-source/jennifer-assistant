@@ -940,6 +940,7 @@ async function handleUserSendMessage() {
         state.selectedAttachment = null;
     }
     
+    state.isThinking = false;
     await processConversationTurn(text || "Ho allegato un file.", attachment);
 }
 
