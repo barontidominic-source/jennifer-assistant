@@ -635,8 +635,10 @@ async function processConversationTurn(userText, attachment = null) {
         while (!isDone && loops < 5) {
             loops++;
             responseJson = await callGeminiAPI(activeConversation);
+            console.log("Gemini API Response:", responseJson);
             
             const candidate = responseJson.candidates?.[0];
+            const finishReason = candidate?.finishReason;
             const content = candidate?.content;
             const parts = content?.parts || [];
             
@@ -689,7 +691,11 @@ async function processConversationTurn(userText, attachment = null) {
                 removeToolIndicator();
             } else {
                 // No function calls, get text response
-                const assistantText = parts.map(p => p.text || '').join('');
+                let assistantText = parts.map(p => p.text || '').join('');
+                if (finishReason && finishReason !== 'STOP') {
+                    assistantText += `\n\n*[Nota di Sistema: La generazione si è interrotta precocemente per motivo: ${finishReason}]*`;
+                }
+                
                 if (assistantText) {
                     addMessage("assistant", assistantText);
                     await appendMessageToSession("assistant", assistantText);
