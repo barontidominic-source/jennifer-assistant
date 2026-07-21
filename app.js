@@ -841,6 +841,16 @@ function updateStatus(dotClass, text) {
     state.isThinking = (dotClass === 'thinking');
 }
 
+function escapeHTML(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 function addMessage(role, text, attachment = null) {
     const container = document.getElementById('messages-container');
     const messageDiv = document.createElement('div');
@@ -850,10 +860,13 @@ function addMessage(role, text, attachment = null) {
     bubble.className = 'message-bubble';
     
     if (role === 'system') {
-        bubble.innerHTML = `<i>${text}</i>`;
+        bubble.innerHTML = `<i>${escapeHTML(text)}</i>`;
     } else {
+        // Escape HTML first to prevent rendering bugs with brackets < >
+        let escaped = escapeHTML(text);
+        
         // Quick simple formatting for markdown bold and paragraphs
-        let formatted = text
+        let formatted = escaped
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`(.*?)`/g, '<code>$1</code>')
@@ -865,7 +878,7 @@ function addMessage(role, text, attachment = null) {
                 ? `<div class="chat-attachment"><img src="data:${attachment.mimeType};base64,${attachment.base64}" class="chat-img-attachment"></div>`
                 : `<div class="chat-attachment doc-attachment">
                      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                     <span>${attachment.name}</span>
+                     <span>${escapeHTML(attachment.name)}</span>
                    </div>`;
             formatted = attachmentHtml + formatted;
         }
