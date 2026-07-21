@@ -915,9 +915,19 @@ async function handleUserSendMessage() {
     
     // Upload file to Google Drive if selected
     if (attachment) {
+        // Wait if attachment is still loading base64
+        if (!attachment.base64) {
+            updateStatus("thinking", "Lettura file in corso...");
+            let waitTime = 0;
+            while (!attachment.base64 && waitTime < 50) {
+                await new Promise(r => setTimeout(r, 100));
+                waitTime++;
+            }
+        }
+
         updateStatus("thinking", "Caricamento file su Google Drive...");
         try {
-            await uploadFileToDrive(attachment.fileObj, state.filesFolderId);
+            await uploadFileToDrive(attachment, state.filesFolderId);
             await listUploadedFiles();
         } catch (err) {
             console.error("File upload failed:", err);
@@ -931,6 +941,26 @@ async function handleUserSendMessage() {
     }
     
     await processConversationTurn(text || "Ho allegato un file.", attachment);
+}
+
+// Helper to determine accurate MIME type based on name or system type
+function getFileMimeType(file) {
+    if (file.type) return file.type;
+    const ext = file.name.split('.').pop().toLowerCase();
+    switch (ext) {
+        case 'pdf': return 'application/pdf';
+        case 'jpg':
+        case 'jpeg': return 'image/jpeg';
+        case 'png': return 'image/png';
+        case 'webp': return 'image/webp';
+        case 'gif': return 'image/gif';
+        case 'txt': return 'text/plain';
+        case 'json': return 'application/json';
+        case 'csv': return 'text/csv';
+        case 'html':
+        case 'htm': return 'text/html';
+        default: return 'application/octet-stream';
+    }
 }
 
 // Initialize file upload handlers
@@ -958,10 +988,12 @@ function initFileUpload() {
             return;
         }
         
+        const calculatedMimeType = getFileMimeType(file);
+        
         state.selectedAttachment = {
             fileObj: file,
             name: file.name,
-            mimeType: file.type,
+            mimeType: calculatedMimeType,
             size: file.size,
             base64: null
         };
@@ -974,7 +1006,7 @@ function initFileUpload() {
         
         previewContainer.classList.remove('hidden');
         
-        const isImage = file.type.startsWith('image/');
+        const isImage = calculatedMimeType.startsWith('image/');
         if (isImage) {
             previewImg.classList.remove('hidden');
             previewDoc.classList.add('hidden');
@@ -1033,7 +1065,7 @@ async function uploadFileToDrive(fileObj, folderId) {
     await makeDriveRequest(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
         method: 'PATCH',
         headers: {
-            'Content-Type': fileObj.type
+            'Content-Type': fileObj.mimeType
         },
         body: fileObj.fileObj
     });
