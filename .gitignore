@@ -1,0 +1,6 @@
+# Ignora eventuali file locali e chiavi temporanee
+.DS_Store
+*.log
+*.tmp
+__pycache__/
+*.pyc

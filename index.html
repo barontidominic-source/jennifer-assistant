@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jennifer - Assistente Personale</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Identity Services client library for OAuth2 -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <div class="logo-icon"></div>
+                    <h2>Jennifer</h2>
+                </div>
+                <button id="settings-btn" class="icon-btn" title="Impostazioni">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+            </div>
+
+            <!-- Connection/OAuth panel -->
+            <div class="auth-panel">
+                <div id="auth-status" class="status-badge disconnected">Non Connesso a Google</div>
+                <button id="login-btn" class="primary-btn">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                    <span>Accedi con Google</span>
+                </button>
+                <button id="logout-btn" class="secondary-btn hidden">
+                    <span>Sconnetti Account</span>
+                </button>
+            </div>
+
+            <!-- Compounding Knowledge Base section -->
+            <div class="knowledge-section">
+                <h3>Memoria di Jennifer</h3>
+                <p class="section-desc">Informazioni che Jennifer ha memorizzato sul tuo Google Drive:</p>
+                <div id="knowledge-list-loader" class="loader hidden"></div>
+                <ul id="knowledge-list" class="knowledge-list">
+                    <li class="empty-state">Nessuna informazione memorizzata. Parla con Jennifer per insegnarle cose nuove!</li>
+                </ul>
+            </div>
+            
+            <div class="sidebar-footer">
+                <span class="version-tag">Jennifer Assistant v1.0</span>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="header-info">
+                    <h1 id="jennifer-title">Jennifer</h1>
+                    <div class="status-indicator">
+                        <span id="status-dot" class="dot offline"></span>
+                        <span id="status-text">In attesa di configurazione...</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="mute-voice-btn" class="icon-btn" title="Disattiva Risposta Vocale">
+                        <svg id="voice-on-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                        <svg id="voice-off-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" class="hidden"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Chat messages feed -->
+            <section class="messages-container" id="messages-container">
+                <div class="message assistant welcome">
+                    <div class="message-bubble">
+                        Ciao! Sono <strong>Jennifer</strong>, la tua assistente personale. 
+                        <br><br>
+                        Per iniziare, ho bisogno della tua chiave API di Gemini e di un Google Client ID per collegarmi al tuo Google Drive. 
+                        Clicca sul pulsante delle impostazioni in alto a sinistra per configurare il mio accesso!
+                    </div>
+                </div>
+            </section>
+
+            <!-- Input area -->
+            <footer class="input-area">
+                <div class="input-wrapper">
+                    <button id="mic-btn" class="mic-btn" title="Parla (Tieni premuto o clicca)">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" class="mic-icon"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                        <div class="pulse-ring"></div>
+                    </button>
+                    <textarea id="chat-input" placeholder="Scrivi un messaggio o premi il microfono per parlare..." rows="1"></textarea>
+                    <button id="send-btn" class="send-btn" title="Invia messaggio">
+                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Configurazione Jennifer</h2>
+                <button id="close-settings-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="gemini-key">Gemini API Key (Google AI Studio)</label>
+                    <input type="password" id="gemini-key" placeholder="AQ.Ab8RN...">
+                </div>
+
+                <div class="form-group">
+                    <label for="google-client-id">Google Client ID (OAuth 2.0)</label>
+                    <input type="text" id="google-client-id" placeholder="1234567890-abc123def.apps.googleusercontent.com">
+                </div>
+
+                <div class="guide-box">
+                    <h3>Come ottenere il Google Client ID:</h3>
+                    <ol>
+                        <li>Apri la <strong><a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></strong>.</li>
+                        <li>Crea un nuovo progetto (es. "Jennifer").</li>
+                        <li>Cerca <strong>Google Drive API</strong> nella barra di ricerca in alto e clicca su <strong>Abilita (Enable)</strong>.</li>
+                        <li>Vai su <strong>Schermata consenso OAuth (OAuth consent screen)</strong>:
+                            <ul>
+                                <li>Scegli tipo utente <strong>Esterno (External)</strong> e clicca Crea.</li>
+                                <li>Inserisci il nome app ("Jennifer") e la tua email. Clicca su Salva.</li>
+                                <li>Nello step "Ambiti" (Scopes) aggiungi: <code>.../auth/drive.file</code> (per creare/gestire i file dell'app).</li>
+                                <li>Nello step "Utenti di test" (Test users) <strong>aggiungi la tua email Google</strong> (altrimenti non potrai accedere).</li>
+                            </ul>
+                        </li>
+                        <li>Vai su <strong>Credenziali (Credentials)</strong> -> Clicca su <strong>Crea credenziali (Create Credentials)</strong> -> Scegli <strong>ID client OAuth</strong>.</li>
+                        <li>Seleziona Tipo applicazione: <strong>Applicazione Web</strong>.</li>
+                        <li>In <strong>Origini JavaScript autorizzate</strong> e <strong>URI di reindirizzamento autorizzati</strong> aggiungi:
+                            <br><code>http://localhost:8000</code>
+                        </li>
+                        <li>Clicca su Crea e copia l'<strong>ID Client</strong> generato nel campo qui sopra.</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-settings-btn" class="primary-btn">Salva Impostazioni</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core App Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
