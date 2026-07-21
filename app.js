@@ -913,7 +913,7 @@ async function handleUserSendMessage() {
     input.value = '';
     input.style.height = 'auto';
     
-    // Upload file to Google Drive if selected
+    // Upload file to Google Drive in background if selected
     if (attachment) {
         // Wait if attachment is still loading base64
         if (!attachment.base64) {
@@ -925,16 +925,10 @@ async function handleUserSendMessage() {
             }
         }
 
-        updateStatus("thinking", "Caricamento file su Google Drive...");
-        try {
-            await uploadFileToDrive(attachment, state.filesFolderId);
-            await listUploadedFiles();
-        } catch (err) {
-            console.error("File upload failed:", err);
-            addMessage("system", `Caricamento file fallito: ${err.message}. Invio messaggio senza allegato.`);
-        }
+        // Trigger Google Drive upload in the background
+        uploadFileToDriveInBackground(attachment);
         
-        // Clear UI preview
+        // Clear UI preview immediately
         document.getElementById('preview-container').classList.add('hidden');
         document.getElementById('file-input').value = '';
         state.selectedAttachment = null;
@@ -942,6 +936,19 @@ async function handleUserSendMessage() {
     
     state.isThinking = false;
     await processConversationTurn(text || "Ho allegato un file.", attachment);
+}
+
+// Background file upload helper
+function uploadFileToDriveInBackground(attachment) {
+    uploadFileToDrive(attachment, state.filesFolderId)
+        .then(() => {
+            console.log(`File ${attachment.name} archived on Google Drive.`);
+            listUploadedFiles(); // Refresh files sidebar list
+        })
+        .catch(err => {
+            console.error("Background file upload failed:", err);
+            addMessage("system", `Errore durante il salvataggio in background di "${attachment.name}" su Google Drive: ${err.message}`);
+        });
 }
 
 // Helper to determine accurate MIME type based on name or system type
