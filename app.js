@@ -998,13 +998,14 @@ function initFileUpload() {
         
         const calculatedMimeType = getFileMimeType(file);
         
-        state.selectedAttachment = {
+        const currentAttachment = {
             fileObj: file,
             name: file.name,
             mimeType: calculatedMimeType,
             size: file.size,
             base64: null
         };
+        state.selectedAttachment = currentAttachment;
         
         // Show preview container
         const previewContainer = document.getElementById('preview-container');
@@ -1023,7 +1024,7 @@ function initFileUpload() {
             const reader = new FileReader();
             reader.onload = (event) => {
                 previewImg.src = event.target.result;
-                state.selectedAttachment.base64 = event.target.result.split(',')[1];
+                currentAttachment.base64 = event.target.result.split(',')[1];
             };
             reader.readAsDataURL(file);
         } else {
@@ -1034,7 +1035,7 @@ function initFileUpload() {
             // Read file as base64 in background
             const reader = new FileReader();
             reader.onload = (event) => {
-                state.selectedAttachment.base64 = event.target.result.split(',')[1];
+                currentAttachment.base64 = event.target.result.split(',')[1];
             };
             reader.readAsDataURL(file);
         }
