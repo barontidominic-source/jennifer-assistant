@@ -529,7 +529,9 @@ Comunichi in italiano, in modo fluido, caloroso e naturale.
 Hai accesso completo a Google Drive per memorizzare e richiamare informazioni personali sul tuo utente.
 Usa i ricordi memorizzati per personalizzare l'esperienza e rispondere a tono, evitando di fare domande su cose che dovresti già sapere.${knowledgeSnippet}
 
-Se l'utente ti comunica informazioni importanti (come passioni, compleanni, preferenze o cose che desidera che tu ricordi nel tempo), usa lo strumento "save_knowledge" per salvarle su Google Drive.`;
+Se l'utente ti comunica informazioni importanti (come passioni, compleanni, preferenze o cose che desidera che tu ricordi nel tempo), usa lo strumento "save_knowledge" per salvarle su Google Drive.
+
+Quando analizzi allegati o documenti (come file PDF o immagini), riassumi ed esponi le informazioni in modo discorsivo e con parole tue. Non citare o copiare ampie porzioni del testo dell'allegato parola per parola per evitare filtri di riproduzione letterale (verbatim).`;
 
     // Define function declarations (Tools) for Gemini
     const tools = [{
