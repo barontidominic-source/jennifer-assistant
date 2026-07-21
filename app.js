@@ -11,10 +11,15 @@ let state = {
     rootFolderId: null,
     memoryFolderId: null,
     chatsFolderId: null,
+    filesFolderId: null, // New
     
     // Stored knowledge dictionary
     knowledge: {},
     knowledgeFileId: null,
+    
+    // Stored files metadata list
+    uploadedFiles: [], // New
+    selectedAttachment: null, // New
     
     // Chat session
     currentChatId: null,
@@ -35,6 +40,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initUI();
     initSettings();
     initWebSpeech();
+    initFileUpload();
     
     // Try to initialize GIS if client ID is already saved
     if (state.googleClientId) {
@@ -277,9 +283,13 @@ async function initGoogleDrive() {
         // Find or create subfolders
         state.memoryFolderId = await findOrCreateFolder('memory', state.rootFolderId);
         state.chatsFolderId = await findOrCreateFolder('chats', state.rootFolderId);
+        state.filesFolderId = await findOrCreateFolder('knowledge_files', state.rootFolderId);
         
         // Load compounding knowledge base file (knowledge_base.json)
         await loadKnowledgeBase();
+        
+        // Load list of files
+        await listUploadedFiles();
         
         updateStatus("online", "Pronto ed allineato con Google Drive");
         addMessage("system", "Connessione stabilita con Google Drive! Ho caricato il mio database dei ricordi.");
@@ -432,10 +442,10 @@ async function startNewChatSession() {
 }
 
 // Append new messages to the current chat session file on Drive
-async function appendMessageToSession(role, content) {
+async function appendMessageToSession(role, content, attachment = null) {
     if (!state.currentChatId) return;
     
-    state.chatHistory.push({ role, content });
+    state.chatHistory.push({ role, content, attachment });
     
     try {
         const session = {
@@ -443,6 +453,7 @@ async function appendMessageToSession(role, content) {
             messages: state.chatHistory.map(m => ({
                 role: m.role,
                 text: m.content,
+                attachment: m.attachment ? { name: m.attachment.name, mimeType: m.attachment.mimeType } : null,
                 timestamp: new Date().toISOString()
             }))
         };
@@ -559,10 +570,21 @@ Se l'utente ti comunica informazioni importanti (come passioni, compleanni, pref
     }];
 
     // Transform chat history to Gemini standard structure
-    const contentsPayload = messages.map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
-    }));
+    const contentsPayload = messages.map(msg => {
+        const parts = [{ text: msg.content }];
+        if (msg.attachment) {
+            parts.push({
+                inlineData: {
+                    mimeType: msg.attachment.mimeType,
+                    data: msg.attachment.base64
+                }
+            });
+        }
+        return {
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: parts
+        };
+    });
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${state.geminiKey}`, {
         method: 'POST',
@@ -591,12 +613,12 @@ Se l'utente ti comunica informazioni importanti (come passioni, compleanni, pref
 }
 
 // Loop handling sending chats to Gemini, executing tools if recommended, and submitting results back
-async function processConversationTurn(userText) {
+async function processConversationTurn(userText, attachment = null) {
     if (state.isThinking) return;
     
     // Add user message to UI and history logs
-    addMessage("user", userText);
-    await appendMessageToSession("user", userText);
+    addMessage("user", userText, attachment);
+    await appendMessageToSession("user", userText, attachment);
     
     updateStatus("thinking", "Jennifer sta pensando...");
     
@@ -819,7 +841,7 @@ function updateStatus(dotClass, text) {
     state.isThinking = (dotClass === 'thinking');
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, attachment = null) {
     const container = document.getElementById('messages-container');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -836,6 +858,18 @@ function addMessage(role, text) {
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`(.*?)`/g, '<code>$1</code>')
             .replace(/\n/g, '<br>');
+            
+        if (attachment) {
+            const isImg = attachment.mimeType.startsWith('image/');
+            const attachmentHtml = isImg
+                ? `<div class="chat-attachment"><img src="data:${attachment.mimeType};base64,${attachment.base64}" class="chat-img-attachment"></div>`
+                : `<div class="chat-attachment doc-attachment">
+                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                     <span>${attachment.name}</span>
+                   </div>`;
+            formatted = attachmentHtml + formatted;
+        }
+        
         bubble.innerHTML = formatted;
     }
     
@@ -869,11 +903,221 @@ function removeToolIndicator() {
 async function handleUserSendMessage() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
-    if (!text) return;
+    
+    // Allow sending just the image/file if there's an attachment
+    if (!text && !state.selectedAttachment) return;
+    
+    const attachment = state.selectedAttachment;
     
     // Clear input box
     input.value = '';
     input.style.height = 'auto';
     
-    await processConversationTurn(text);
+    // Upload file to Google Drive if selected
+    if (attachment) {
+        updateStatus("thinking", "Caricamento file su Google Drive...");
+        try {
+            await uploadFileToDrive(attachment.fileObj, state.filesFolderId);
+            await listUploadedFiles();
+        } catch (err) {
+            console.error("File upload failed:", err);
+            addMessage("system", `Caricamento file fallito: ${err.message}. Invio messaggio senza allegato.`);
+        }
+        
+        // Clear UI preview
+        document.getElementById('preview-container').classList.add('hidden');
+        document.getElementById('file-input').value = '';
+        state.selectedAttachment = null;
+    }
+    
+    await processConversationTurn(text || "Ho allegato un file.", attachment);
+}
+
+// Initialize file upload handlers
+function initFileUpload() {
+    const attachBtn = document.getElementById('attach-btn');
+    const fileInput = document.getElementById('file-input');
+    const cancelBtn = document.getElementById('cancel-preview-btn');
+    
+    if (!attachBtn || !fileInput || !cancelBtn) return;
+    
+    // Trigger hidden file input click
+    attachBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    // Handle file selection
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Check size limit (e.g. 4MB for inline data base64 and fast uploads)
+        if (file.size > 4 * 1024 * 1024) {
+            alert("Il file è troppo grande! Seleziona un file inferiore a 4MB.");
+            fileInput.value = '';
+            return;
+        }
+        
+        state.selectedAttachment = {
+            fileObj: file,
+            name: file.name,
+            mimeType: file.type,
+            size: file.size,
+            base64: null
+        };
+        
+        // Show preview container
+        const previewContainer = document.getElementById('preview-container');
+        const previewImg = document.getElementById('preview-img');
+        const previewDoc = document.getElementById('preview-doc-icon');
+        const previewDocName = document.getElementById('preview-doc-name');
+        
+        previewContainer.classList.remove('hidden');
+        
+        const isImage = file.type.startsWith('image/');
+        if (isImage) {
+            previewImg.classList.remove('hidden');
+            previewDoc.classList.add('hidden');
+            
+            // Read image as base64 for preview and API
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                previewImg.src = event.target.result;
+                state.selectedAttachment.base64 = event.target.result.split(',')[1];
+            };
+            reader.readAsDataURL(file);
+        } else {
+            previewImg.classList.add('hidden');
+            previewDoc.classList.remove('hidden');
+            previewDocName.innerText = file.name;
+            
+            // Read file as base64 in background
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                state.selectedAttachment.base64 = event.target.result.split(',')[1];
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    // Clear preview
+    cancelBtn.addEventListener('click', () => {
+        fileInput.value = '';
+        document.getElementById('preview-container').classList.add('hidden');
+        state.selectedAttachment = null;
+    });
+}
+
+// Upload file to Google Drive using HTTP v3
+async function uploadFileToDrive(fileObj, folderId) {
+    if (!state.accessToken) throw new Error("Utente non autenticato con Google");
+    
+    // 1. Create file metadata
+    const metadata = {
+        name: fileObj.name,
+        parents: [folderId]
+    };
+    
+    const response = await makeDriveRequest('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(metadata)
+    });
+    
+    const fileMetadata = await response.json();
+    const fileId = fileMetadata.id;
+    
+    // 2. Upload actual binary file content
+    await makeDriveRequest(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': fileObj.type
+        },
+        body: fileObj.fileObj
+    });
+    
+    return fileId;
+}
+
+// List files inside knowledge_files subfolder in Drive
+async function listUploadedFiles() {
+    const list = document.getElementById('files-list');
+    const loader = document.getElementById('files-list-loader');
+    if (!list) return;
+    
+    if (loader) loader.classList.remove('hidden');
+    
+    try {
+        if (!state.filesFolderId) return;
+        
+        let query = `'${state.filesFolderId}' in parents and trashed=false`;
+        const response = await makeDriveRequest(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,webViewLink)&orderBy=createdTime desc`);
+        const data = await response.json();
+        
+        list.innerHTML = '';
+        const files = data.files || [];
+        
+        if (files.length === 0) {
+            list.innerHTML = '<li class="empty-state">Nessun file archiviato. Allega una foto o un documento in chat!</li>';
+            return;
+        }
+        
+        files.forEach(file => {
+            const item = document.createElement('li');
+            item.className = 'file-item';
+            
+            const isImage = file.mimeType.startsWith('image/');
+            const iconSvg = isImage 
+                ? `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`
+                : `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
+            
+            item.innerHTML = `
+                <div class="file-info">
+                    ${iconSvg}
+                    <span class="file-name" title="${file.name}">${file.name}</span>
+                </div>
+                <div class="file-actions">
+                    <span class="delete-file" title="Elimina questo file" data-id="${file.id}">&times;</span>
+                </div>
+            `;
+            
+            // Open Drive link on click
+            item.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-file')) {
+                    e.stopPropagation();
+                    deleteFileFromDrive(file.id, file.name);
+                    return;
+                }
+                if (file.webViewLink) {
+                    window.open(file.webViewLink, '_blank');
+                } else {
+                    alert(`File: ${file.name}\nMIME: ${file.mimeType}`);
+                }
+            });
+            
+            list.appendChild(item);
+        });
+    } catch (err) {
+        console.error("Failed to list files:", err);
+    } finally {
+        if (loader) loader.classList.add('hidden');
+    }
+}
+
+// Delete file from Drive
+async function deleteFileFromDrive(fileId, name) {
+    if (confirm(`Sei sicuro di voler eliminare definitivamente il file "${name}" da Google Drive?`)) {
+        try {
+            await makeDriveRequest(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+                method: 'DELETE'
+            });
+            addMessage("system", `File "${name}" eliminato con successo.`);
+            await listUploadedFiles();
+        } catch (err) {
+            console.error("Failed to delete file:", err);
+            alert(`Errore durante l'eliminazione del file: ${err.message}`);
+        }
+    }
 }
